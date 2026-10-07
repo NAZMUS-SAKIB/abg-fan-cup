@@ -69,6 +69,23 @@
   </section>
 
   <section class="dashboard">
+    <div class="vote-card bars-panel">
+      <h2>Fan Cup Leaderboard</h2>
+      <p class="section-desc">Live standings</p>
+      <div class="bars" *ngIf="results as r">
+        <div class="bar-row" *ngFor="let u of r.universities; let i = index">
+          <div class="meta">
+            <span class="rank">#{{ i + 1 }}</span>
+            <span class="uname">{{ u.name }}</span>
+            <span class="count">{{ u.votes | number }} · {{ u.percent | number: '1.0-1' }}%</span>
+          </div>
+          <div class="track">
+            <div class="fill" [style.width.%]="(u.votes / maxVotes()) * 100"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="charts-row">
       <div class="vote-card chart-panel">
         <h2>Vote share</h2>
@@ -83,23 +100,6 @@
         <p class="section-desc">Daily turnout</p>
         <div class="chart-box">
           <canvas baseChart [data]="areaData" [options]="areaOptions" type="line"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="vote-card bars-panel">
-      <h2>Fan Cup Leaderboard</h2>
-      <p class="section-desc">Live standings</p>
-      <div class="bars" *ngIf="results as r">
-        <div class="bar-row" *ngFor="let u of r.universities; let i = index">
-          <div class="meta">
-            <span class="rank">#{{ i + 1 }}</span>
-            <span class="uname">{{ u.name }}</span>
-            <span class="count">{{ u.votes | number }} · {{ u.percent | number: '1.0-1' }}%</span>
-          </div>
-          <div class="track">
-            <div class="fill" [style.width.%]="(u.votes / maxVotes()) * 100"></div>
-          </div>
         </div>
       </div>
     </div>

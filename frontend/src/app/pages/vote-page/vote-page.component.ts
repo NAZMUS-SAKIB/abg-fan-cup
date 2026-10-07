@@ -47,8 +47,11 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'bottom',
-        labels: { color: '#334155', boxWidth: 12, font: { size: 11 } },
+        display: false,
+        // Re-enable doughnut labels under the chart:
+        // display: true,
+        // position: 'bottom',
+        // labels: { color: '#334155', boxWidth: 12, font: { size: 11 } },
       },
     },
   };
