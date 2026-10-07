@@ -1,7 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
@@ -19,31 +18,14 @@ async function bootstrap() {
     }),
   );
 
-  const raw = config.get<string>('CORS_ORIGIN') || 'http://localhost:4200';
-  const listed = raw
-    .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
-  const allowAll = listed.includes('*');
-
-  const cors: CorsOptions = {
-    origin: allowAll
-      ? true
-      : (
-          origin: string | undefined,
-          cb: (err: Error | null, allow?: boolean) => void,
-        ) => {
-          if (!origin || listed.includes(origin)) {
-            cb(null, true);
-          } else {
-            cb(null, false);
-          }
-        },
-    credentials: !allowAll,
+  // Public voting API: allow every browser origin/network.
+  // (credentials disabled so any site can call the API safely)
+  app.enableCors({
+    origin: true,
+    credentials: false,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-  };
-  app.enableCors(cors);
+  });
 
   app.enableShutdownHooks();
 

@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration } from 'chart.js';
-import { Subscription, interval, startWith, switchMap } from 'rxjs';
+import { Subscription, interval, startWith, switchMap, retry, timer } from 'rxjs';
 import {
   ApiService,
   ResultsPayload,
@@ -106,10 +106,24 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    this.api.getUniversities().subscribe({
-      next: (list) => (this.universities = list),
-      error: () => (this.error = 'Could not load universities. Is the API running?'),
-    });
+    this.error = 'Connecting to server… (first load may take up to a minute)';
+    this.api
+      .getUniversities()
+      .pipe(
+        retry({
+          count: 8,
+          delay: (_err, retryIndex) => timer(Math.min(15000, 2000 * retryIndex)),
+        }),
+      )
+      .subscribe({
+        next: (list) => {
+          this.universities = list;
+          this.error = '';
+        },
+        error: () =>
+          (this.error =
+            'Could not reach the voting server. Wait 30 seconds and refresh the page.'),
+      });
 
     this.pollSub = interval(2000)
       .pipe(
