@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-options.interface';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 
@@ -25,11 +26,13 @@ async function bootstrap() {
     .filter(Boolean);
   const allowAll = listed.includes('*');
 
-  // browsers reject Access-Control-Allow-Origin: * when credentials=true
-  app.enableCors({
+  const cors: CorsOptions = {
     origin: allowAll
       ? true
-      : (origin, cb) => {
+      : (
+          origin: string | undefined,
+          cb: (err: Error | null, allow?: boolean) => void,
+        ) => {
           if (!origin || listed.includes(origin)) {
             cb(null, true);
           } else {
@@ -39,7 +42,8 @@ async function bootstrap() {
     credentials: !allowAll,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-  });
+  };
+  app.enableCors(cors);
 
   app.enableShutdownHooks();
 
