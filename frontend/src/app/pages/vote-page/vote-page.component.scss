@@ -22,38 +22,6 @@
   pointer-events: none;
 }
 
-.topbar {
-  position: absolute;
-  z-index: 2;
-  top: 18px;
-  left: 18px;
-  right: 18px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.abg {
-  height: 62px;
-  width: 62px;
-  object-fit: cover;
-  border-radius: 12px;
-  background: #193b68;
-}
-
-.badge {
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  color: #fff;
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  background: rgba(9, 31, 59, 0.38);
-  backdrop-filter: blur(8px);
-}
 
 .hero-content {
   position: absolute;
@@ -413,10 +381,6 @@
 }
 
 @media (max-width: 640px) {
-  .abg {
-    width: 52px;
-    height: 52px;
-  }
   .total-number {
     font-size: 35px;
   }
