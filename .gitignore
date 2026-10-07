@@ -15,3 +15,7 @@ backend/.claude/
 backend/.cursor/
 backend/.devin/
 *.tsbuildinfo
+
+backend/.env.render.txt
+.env.render.txt
+
