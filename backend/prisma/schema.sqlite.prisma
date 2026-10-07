@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model University {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  sortOrder Int         @default(0) @map("sort_order")
+  createdAt DateTime    @default(now()) @map("created_at")
+  votes     Vote[]
+  count     VoteCount?
+
+  @@map("universities")
+}
+
+model Vote {
+  id           Int        @id @default(autoincrement())
+  universityId Int        @map("university_id")
+  googleSub    String     @unique @map("google_sub")
+  email        String?
+  ip           String?
+  userAgent    String?    @map("user_agent")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  university   University @relation(fields: [universityId], references: [id])
+
+  @@index([universityId])
+  @@index([createdAt])
+  @@map("votes")
+}
+
+model VoteCount {
+  universityId Int        @id @map("university_id")
+  count        Int        @default(0)
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  university   University @relation(fields: [universityId], references: [id])
+
+  @@map("vote_counts")
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("admins")
+}
+
+model Setting {
+  id           Int      @id @default(1)
+  votingEndsAt DateTime @map("voting_ends_at")
+
+  @@map("settings")
+}

@@ -1,0 +1,11 @@
+<header class="topnav">
+  <a routerLink="/" class="brand-wrap">
+    <img src="assets/abg-logo.png" alt="ABG" class="nav-logo" />
+    <span>ABG University Cup 2026</span>
+  </a>
+  <a routerLink="/admin" class="admin-link">Admin Login</a>
+</header>
+<main>
+  <router-outlet />
+</main>
+<app-site-footer [showDevCredit]="showDevCredit" />

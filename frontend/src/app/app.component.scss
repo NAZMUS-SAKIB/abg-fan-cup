@@ -1,0 +1,51 @@
+.topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(5, 24, 48, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-decoration: none;
+  color: #fff;
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+  font-size: clamp(0.85rem, 2.4vw, 1.05rem);
+}
+
+.nav-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #193b68;
+}
+
+.admin-link {
+  color: #ffd58d;
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 700;
+  border: 1px solid rgba(255, 213, 141, 0.45);
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 159, 28, 0.12);
+}
+
+.admin-link:hover {
+  background: rgba(255, 159, 28, 0.22);
+  color: #fff;
+}
+
+main {
+  min-height: calc(100vh - 64px - 120px);
+}

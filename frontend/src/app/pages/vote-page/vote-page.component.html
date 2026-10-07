@@ -1,0 +1,111 @@
+<section class="hero">
+  <div class="topbar">
+    <img class="abg" src="assets/abg-logo.png" alt="ABG Anvir Bashundhara Group" />
+    <div class="badge">ABG University Cup 2026</div>
+  </div>
+  <div class="hero-content">
+    <div class="kicker">FAN CUP VOTING</div>
+    <h1>Your University. Your Pride. Your Vote.</h1>
+  </div>
+</section>
+
+<section class="container">
+  <div class="total" [class.pulse]="livePulse">
+    <div>
+      <div class="total-label">Total Votes</div>
+      <div class="total-number">{{ results?.totalVotes || 0 | number }}</div>
+    </div>
+    <div class="status-block">
+      <div class="live" [class.closed]="!votingOpen">
+        ● {{ votingOpen ? 'VOTING OPEN' : 'VOTING CLOSED' }}
+      </div>
+      <div class="countdown" *ngIf="votingOpen">
+        <div class="cd-item"><strong>{{ countdown.days }}</strong><span>Days</span></div>
+        <div class="cd-item"><strong>{{ countdown.hours }}</strong><span>Hrs</span></div>
+        <div class="cd-item"><strong>{{ countdown.minutes }}</strong><span>Min</span></div>
+        <div class="cd-item"><strong>{{ countdown.seconds }}</strong><span>Sec</span></div>
+      </div>
+      <p class="ends" *ngIf="results?.votingEndsAt">
+        Ends: {{ results?.votingEndsAt | date: 'medium' }}
+      </p>
+    </div>
+  </div>
+
+  <section class="vote-card">
+    <h2>Vote for your university</h2>
+    <p class="section-desc">Select one university and submit your vote.</p>
+
+    <div class="google-wrap">
+      <div #googleBtn class="google-btn"></div>
+      <button *ngIf="isDemoMode && !googleToken && votingOpen" type="button" class="demo-btn" (click)="continueDemo()">
+        Continue as demo voter (local)
+      </button>
+      <p class="hint" *ngIf="googleToken && !alreadyVoted && votingOpen">Signed in — select a university.</p>
+      <p class="hint ok" *ngIf="alreadyVoted">Voted{{ votedUniversityName ? ': ' + votedUniversityName : '' }}</p>
+      <p class="hint err" *ngIf="!votingOpen">Voting period has ended.</p>
+    </div>
+
+    <div class="uni-grid">
+      <button
+        type="button"
+        class="uni"
+        *ngFor="let u of universities"
+        [class.selected]="selectedId === u.id"
+        [disabled]="alreadyVoted || loading || !votingOpen"
+        (click)="select(u.id)"
+      >
+        <span class="radio"></span>
+        <span class="name">{{ u.name }}</span>
+      </button>
+    </div>
+
+    <button
+      type="button"
+      class="cast"
+      [disabled]="alreadyVoted || loading || !selectedId || !googleToken || !votingOpen"
+      (click)="castVote()"
+    >
+      {{ loading ? 'Submitting…' : alreadyVoted ? 'Vote recorded' : 'CAST MY VOTE' }}
+    </button>
+
+    <p class="msg ok" *ngIf="message">{{ message }}</p>
+    <p class="msg err" *ngIf="error">{{ error }}</p>
+  </section>
+
+  <section class="dashboard">
+    <div class="charts-row">
+      <div class="vote-card chart-panel">
+        <h2>Vote share</h2>
+        <p class="section-desc">Percentage by university</p>
+        <div class="chart-box">
+          <canvas baseChart [data]="pieData" [options]="pieOptions" type="doughnut"></canvas>
+        </div>
+      </div>
+
+      <div class="vote-card chart-panel">
+        <h2>Votes by day</h2>
+        <p class="section-desc">Daily turnout</p>
+        <div class="chart-box">
+          <canvas baseChart [data]="areaData" [options]="areaOptions" type="line"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="vote-card bars-panel">
+      <h2>Fan Cup Leaderboard</h2>
+      <p class="section-desc">Live standings</p>
+      <div class="bars" *ngIf="results as r">
+        <div class="bar-row" *ngFor="let u of r.universities; let i = index">
+          <div class="meta">
+            <span class="rank">#{{ i + 1 }}</span>
+            <span class="uname">{{ u.name }}</span>
+            <span class="count">{{ u.votes | number }} · {{ u.percent | number: '1.0-1' }}%</span>
+          </div>
+          <div class="track">
+            <div class="fill" [style.width.%]="(u.votes / maxVotes()) * 100"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>

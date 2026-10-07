@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: abg-fan-cup-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npx prisma db seed && npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ALLOW_DEV_AUTH
+        value: "true"
+      - key: GOOGLE_CLIENT_ID
+        value: "REPLACE_WITH_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false

@@ -1,0 +1,59 @@
+.site-footer {
+  background: var(--navy2);
+  color: rgba(255, 255, 255, 0.88);
+  text-align: center;
+  padding: 1.25rem 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.line-main {
+  font-family: "Sora", sans-serif;
+  font-size: clamp(0.78rem, 2.2vw, 0.92rem);
+  font-weight: 600;
+}
+
+.line-rules {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.line-dev {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.contact-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #ffd58d;
+  text-decoration: none;
+}
+
+.contact-link:hover {
+  text-decoration: underline;
+}
+
+.contact-link.whatsapp {
+  color: #86efac;
+}
+
+.contact-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}

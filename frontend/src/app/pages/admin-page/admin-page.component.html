@@ -1,0 +1,142 @@
+<section class="admin">
+  <div class="page-head">
+    <div>
+      <h1>Admin dashboard</h1>
+      <p class="sub">Manage voting, universities, and export results</p>
+    </div>
+    <a routerLink="/" class="back-link">&larr; Back to voting</a>
+  </div>
+
+  <div class="card login-card" *ngIf="!token">
+    <h2>Sign in</h2>
+    <label>
+      Username
+      <input [(ngModel)]="username" autocomplete="username" />
+    </label>
+    <label>
+      Password
+      <input
+        type="password"
+        [(ngModel)]="password"
+        autocomplete="current-password"
+        (keyup.enter)="login()"
+      />
+    </label>
+    <button type="button" class="btn-primary" (click)="login()" [disabled]="loading">
+      {{ loading ? 'Signing in…' : 'Sign in' }}
+    </button>
+    <p class="msg err" *ngIf="error">{{ error }}</p>
+  </div>
+
+  <ng-container *ngIf="token">
+    <div class="kpi-row" *ngIf="summary as s">
+      <div class="kpi">
+        <span class="kpi-label">Total votes</span>
+        <strong class="kpi-value">{{ s.totalVotes | number }}</strong>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Universities</span>
+        <strong class="kpi-value">{{ s.universities.length }}</strong>
+      </div>
+      <div class="kpi">
+        <span class="kpi-label">Status</span>
+        <strong
+          class="kpi-value status"
+          [class.open]="s.votingOpen"
+          [class.closed]="!s.votingOpen"
+        >
+          {{ s.votingOpen ? 'OPEN' : 'CLOSED' }}
+        </strong>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <h2>Quick actions</h2>
+        <div class="actions">
+          <button type="button" class="btn-secondary" (click)="loadSummary()">Refresh</button>
+          <button type="button" class="btn-primary" (click)="downloadExcel()">Download Excel</button>
+          <button type="button" class="btn-ghost" (click)="logout()">Logout</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Voting end date</h3>
+        <p>Countdown on the home page follows this setting.</p>
+        <div class="inline-form">
+          <input type="datetime-local" [(ngModel)]="endLocal" />
+          <button type="button" class="btn-secondary" (click)="saveEndDate()">Save</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Manage universities</h3>
+        <p>Add, rename, or remove universities (delete only when vote count is zero).</p>
+        <div class="inline-form add-form">
+          <input
+            [(ngModel)]="newUniName"
+            placeholder="New university name"
+            (keyup.enter)="addUniversity()"
+          />
+          <button type="button" class="btn-primary" (click)="addUniversity()">Add</button>
+        </div>
+
+        <div class="table-wrap" *ngIf="summary as s">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>University</th>
+                <th>Votes</th>
+                <th>%</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let u of s.universities; let i = index">
+                <td>{{ i + 1 }}</td>
+                <td>
+                  <ng-container *ngIf="editingId !== u.id; else editRow">
+                    {{ u.name }}
+                  </ng-container>
+                  <ng-template #editRow>
+                    <input
+                      class="edit-input"
+                      [(ngModel)]="editingName"
+                      (keyup.enter)="saveEdit()"
+                    />
+                  </ng-template>
+                </td>
+                <td>{{ u.votes | number }}</td>
+                <td>{{ u.percent | number: '1.0-1' }}%</td>
+                <td class="row-actions">
+                  <ng-container *ngIf="editingId !== u.id; else editActions">
+                    <button type="button" class="btn-text" (click)="startEdit(u.id, u.name)">
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-text danger"
+                      [disabled]="u.votes > 0"
+                      [title]="u.votes > 0 ? 'Cannot delete — has votes' : 'Delete university'"
+                      (click)="deleteUniversity(u.id, u.name, u.votes)"
+                    >
+                      Delete
+                    </button>
+                  </ng-container>
+                  <ng-template #editActions>
+                    <button type="button" class="btn-text" (click)="saveEdit()">Save</button>
+                    <button type="button" class="btn-text" (click)="cancelEdit()">Cancel</button>
+                  </ng-template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="msg ok" *ngIf="success">{{ success }}</p>
+      <p class="msg err" *ngIf="error">{{ error }}</p>
+    </div>
+  </ng-container>
+</section>
