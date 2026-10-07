@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "cf:deploy": "npx wrangler deploy"
+    "cf:deploy": "npx wrangler deploy --assets=./dist/frontend/browser",
+    "cf:pages": "npx wrangler pages deploy ./dist/frontend/browser --project-name=abg-university-cup"
   },
   "private": true,
   "dependencies": {
