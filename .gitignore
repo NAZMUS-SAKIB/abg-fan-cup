@@ -10,3 +10,8 @@ backend/dev.db
 backend/prisma/*.db
 backend/prisma/*.db-journal
 *.db
+backend/.agents/
+backend/.claude/
+backend/.cursor/
+backend/.devin/
+*.tsbuildinfo
