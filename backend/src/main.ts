@@ -18,14 +18,25 @@ async function bootstrap() {
     }),
   );
 
-  const origins = (config.get<string>('CORS_ORIGIN') || 'http://localhost:4200')
+  const raw = config.get<string>('CORS_ORIGIN') || 'http://localhost:4200';
+  const listed = raw
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
+  const allowAll = listed.includes('*');
 
+  // browsers reject Access-Control-Allow-Origin: * when credentials=true
   app.enableCors({
-    origin: origins,
-    credentials: true,
+    origin: allowAll
+      ? true
+      : (origin, cb) => {
+          if (!origin || listed.includes(origin)) {
+            cb(null, true);
+          } else {
+            cb(null, false);
+          }
+        },
+    credentials: !allowAll,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
