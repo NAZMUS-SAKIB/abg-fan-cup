@@ -87,7 +87,11 @@
     </div>
 
     <div class="charts-row">
-      <div class="vote-card chart-panel">
+      <div
+        class="vote-card chart-panel"
+        (mouseenter)="pauseChart('pie')"
+        (mouseleave)="resumeChart('pie')"
+      >
         <h2>Vote share</h2>
         <p class="section-desc">Percentage by university</p>
         <div class="chart-box">
@@ -95,7 +99,11 @@
         </div>
       </div>
 
-      <div class="vote-card chart-panel">
+      <div
+        class="vote-card chart-panel"
+        (mouseenter)="pauseChart('area')"
+        (mouseleave)="resumeChart('area')"
+      >
         <h2>Votes by day</h2>
         <p class="section-desc">Daily turnout</p>
         <div class="chart-box">

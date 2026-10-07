@@ -90,6 +90,9 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   private googleSub?: Subscription;
   private countdownSub?: Subscription;
   private endsAtMs = 0;
+  private pieHovered = false;
+  private areaHovered = false;
+  private pendingResults: ResultsPayload | null = null;
   private readonly colors = [
     '#ff9f1c',
     '#ff5a1f',
@@ -223,42 +226,59 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
     return Math.max(1, ...this.results.universities.map((u) => u.votes));
   }
 
+  pauseChart(kind: 'pie' | 'area') {
+    if (kind === 'pie') this.pieHovered = true;
+    else this.areaHovered = true;
+  }
+
+  resumeChart(kind: 'pie' | 'area') {
+    if (kind === 'pie') this.pieHovered = false;
+    else this.areaHovered = false;
+    if (this.pendingResults) this.applyResults(this.pendingResults);
+  }
+
   private applyResults(data: ResultsPayload) {
+    this.pendingResults = data;
     this.results = data;
     this.votingOpen = data.votingOpen;
     this.endsAtMs = new Date(data.votingEndsAt).getTime();
     this.tickCountdown();
     this.livePulse = true;
     setTimeout(() => (this.livePulse = false), 400);
-    this.pieData = {
-      labels: data.universities.map((u) => u.name),
-      datasets: [
-        {
-          data: data.universities.map((u) => u.votes),
-          backgroundColor: this.colors,
-          borderWidth: 0,
-        },
-      ],
-    };
 
-    const daily = data.dailyVotes ?? [];
-    this.areaData = {
-      labels: daily.map((d) => this.formatDayLabel(d.date)),
-      datasets: [
-        {
-          data: daily.map((d) => d.votes),
-          fill: true,
-          tension: 0.35,
-          borderColor: '#0b2748',
-          backgroundColor: 'rgba(255, 159, 28, 0.35)',
-          pointBackgroundColor: '#ff9f1c',
-          pointBorderColor: '#fff',
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          borderWidth: 2,
-        },
-      ],
-    };
+    if (!this.pieHovered) {
+      this.pieData = {
+        labels: data.universities.map((u) => u.name),
+        datasets: [
+          {
+            data: data.universities.map((u) => u.votes),
+            backgroundColor: this.colors,
+            borderWidth: 0,
+          },
+        ],
+      };
+    }
+
+    if (!this.areaHovered) {
+      const daily = data.dailyVotes ?? [];
+      this.areaData = {
+        labels: daily.map((d) => this.formatDayLabel(d.date)),
+        datasets: [
+          {
+            data: daily.map((d) => d.votes),
+            fill: true,
+            tension: 0.35,
+            borderColor: '#0b2748',
+            backgroundColor: 'rgba(255, 159, 28, 0.35)',
+            pointBackgroundColor: '#ff9f1c',
+            pointBorderColor: '#fff',
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            borderWidth: 2,
+          },
+        ],
+      };
+    }
   }
 
   private formatDayLabel(yyyyMmDd: string): string {
