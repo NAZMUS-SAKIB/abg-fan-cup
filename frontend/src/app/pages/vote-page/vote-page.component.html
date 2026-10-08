@@ -27,19 +27,89 @@
     </div>
   </div>
 
+  <div class="period-stats" *ngIf="results?.periodStats?.length">
+    <div class="period-col" *ngFor="let p of results?.periodStats ?? []">
+      <div class="period-label">{{ p?.label || '—' }}</div>
+      <div class="period-leader">{{ p?.leaderName || '—' }}</div>
+      <div class="period-meta">
+        <span>{{ (p?.totalVotes ?? 0) | number }} votes cast</span>
+        <span *ngIf="p?.leaderName"> · Leading with {{ (p?.leaderVotes ?? 0) | number }}</span>
+      </div>
+    </div>
+  </div>
+
   <section class="vote-card">
     <h2>Vote for your university</h2>
-    <p class="section-desc">Select one university and submit your vote.</p>
+    <p class="section-desc">One verified email. One vote. Select your university, then confirm by email.</p>
 
-    <div class="google-wrap">
-      <div #googleBtn class="google-btn"></div>
-      <button *ngIf="isDemoMode && !googleToken && votingOpen" type="button" class="demo-btn" (click)="continueDemo()">
-        Continue as demo voter (local)
-      </button>
-      <p class="hint" *ngIf="googleToken && !alreadyVoted && votingOpen">Signed in — select a university.</p>
-      <p class="hint ok" *ngIf="alreadyVoted">Voted{{ votedUniversityName ? ': ' + votedUniversityName : '' }}</p>
-      <p class="hint err" *ngIf="!votingOpen">Voting period has ended.</p>
+    <div class="auth-panel" *ngIf="!alreadyVoted && votingOpen">
+      <!-- Signed in -->
+      <div class="auth-signed" *ngIf="authStep === 'ready'">
+        <p class="hint ok">Signed in as {{ emailMasked || email }}</p>
+        <button type="button" class="linkish" (click)="signOut()">Use a different email</button>
+      </div>
+
+      <!-- Waiting for inbox -->
+      <div class="auth-waiting" *ngIf="authStep === 'waiting'">
+        <div class="inbox-icon" aria-hidden="true">✉</div>
+        <h3 class="auth-title">Check your email</h3>
+        <p class="auth-copy">
+          We sent a confirmation link to <strong>{{ emailMasked || email }}</strong>.
+          Open it on this device to continue.
+        </p>
+        <p class="auth-copy muted" *ngIf="mailDelivered">
+          Link expires in 15 minutes. Check Inbox, then Spam/Promotions if needed.
+        </p>
+        <p class="hint" *ngIf="devHint">{{ devHint }}</p>
+        <div class="auth-actions" *ngIf="magicUrlDev">
+          <button type="button" class="magic-btn" (click)="openDevMagicLink()">Open confirmation link</button>
+        </div>
+        <div class="auth-actions">
+          <button type="button" class="secondary-btn" [disabled]="loading || resendCooldown > 0" (click)="sendMagicLink()">
+            {{ resendCooldown > 0 ? 'Resend in ' + resendCooldown + 's' : 'Resend link' }}
+          </button>
+          <button type="button" class="linkish" (click)="resetAuthForm()">Change email</button>
+        </div>
+      </div>
+
+      <!-- Email form -->
+      <div class="auth-form" *ngIf="authStep === 'email'">
+        <label class="field-label" for="voter-email">Email address</label>
+        <input
+          id="voter-email"
+          class="email-input"
+          type="email"
+          name="email"
+          autocomplete="email"
+          placeholder="you@university.edu"
+          [(ngModel)]="email"
+          [disabled]="loading || !votingOpen"
+          (keyup.enter)="sendMagicLink()"
+        />
+        <div #turnstileHost class="turnstile-host" *ngIf="turnstileEnabled"></div>
+        <button
+          type="button"
+          class="magic-btn"
+          [disabled]="loading || !email.trim() || !votingOpen"
+          (click)="sendMagicLink()"
+        >
+          {{ loading ? 'Sending…' : 'Send magic link' }}
+        </button>
+        <p class="hint">We’ll email you a one-tap confirmation. No password needed.</p>
+      </div>
+
+      <!-- Consuming link -->
+      <div class="auth-waiting" *ngIf="authStep === 'consuming'">
+        <p class="hint">Confirming your email…</p>
+      </div>
     </div>
+
+    <div class="auth-panel" *ngIf="alreadyVoted">
+      <p class="hint ok">Voted{{ votedUniversityName ? ': ' + votedUniversityName : '' }}</p>
+      <p class="hint" *ngIf="emailMasked">Signed in as {{ emailMasked }}</p>
+    </div>
+
+    <p class="hint err" *ngIf="!votingOpen">Voting period has ended.</p>
 
     <div class="uni-grid">
       <button
@@ -47,7 +117,7 @@
         class="uni"
         *ngFor="let u of universities"
         [class.selected]="selectedId === u.id"
-        [disabled]="alreadyVoted || loading || !votingOpen"
+        [disabled]="alreadyVoted || loading || !votingOpen || authStep !== 'ready'"
         (click)="select(u.id)"
       >
         <span class="radio"></span>
@@ -58,14 +128,29 @@
     <button
       type="button"
       class="cast"
-      [disabled]="alreadyVoted || loading || !selectedId || !googleToken || !votingOpen"
+      [disabled]="alreadyVoted || loading || !selectedId || authStep !== 'ready' || !votingOpen"
       (click)="castVote()"
     >
       {{ loading ? 'Submitting…' : alreadyVoted ? 'Vote recorded' : 'CAST MY VOTE' }}
     </button>
 
-    <p class="msg ok" *ngIf="message">{{ message }}</p>
+    <p class="msg ok" *ngIf="message && !showCelebration">{{ message }}</p>
     <p class="msg err" *ngIf="error">{{ error }}</p>
+
+    <div class="celebration" *ngIf="showCelebration" role="status">
+      <div class="celebration-burst" aria-hidden="true"></div>
+      <h3>Vote locked in!</h3>
+      <p>
+        You backed
+        <strong>{{ votedUniversityName || 'your university' }}</strong>.
+        Rally your friends.
+      </p>
+      <div class="celebration-actions">
+        <button type="button" class="share-btn" (click)="shareVote()">Share my vote</button>
+        <button type="button" class="dismiss-btn" (click)="dismissCelebration()">Close</button>
+      </div>
+      <p class="share-hint" *ngIf="shareHint">{{ shareHint }}</p>
+    </div>
   </section>
 
   <section class="dashboard">

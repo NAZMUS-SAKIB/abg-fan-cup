@@ -1,8 +1,18 @@
 node_modules/
 dist/
 .angular/
+# Secrets — never commit
 .env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+backend/.env
+backend/.env.render.txt
+.env.render.txt
 .env.local
+
 *.log
 .DS_Store
 coverage/
@@ -16,6 +26,4 @@ backend/.cursor/
 backend/.devin/
 *.tsbuildinfo
 
-backend/.env.render.txt
-.env.render.txt
 

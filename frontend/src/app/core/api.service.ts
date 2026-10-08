@@ -2,6 +2,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { VoterSessionService } from './voter-session.service';
 
 export type University = { id: number; name: string };
 
@@ -17,13 +18,30 @@ export type ResultsPayload = {
     percent: number;
   }>;
   dailyVotes: Array<{ date: string; votes: number }>;
+  periodStats?: Array<{
+    key: '24h' | '7d' | '15d';
+    label: string;
+    totalVotes: number;
+    leaderName: string | null;
+    leaderVotes: number;
+  }>;
 };
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly base = environment.apiUrl;
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly session: VoterSessionService,
+  ) {}
+
+  private voterHeaders(): HttpHeaders {
+    const token = this.session.getToken();
+    return new HttpHeaders(
+      token ? { Authorization: `Bearer ${token}` } : {},
+    );
+  }
 
   getUniversities(): Observable<University[]> {
     return this.http.get<University[]>(`${this.base}/api/universities`);
@@ -33,19 +51,56 @@ export class ApiService {
     return this.http.get<ResultsPayload>(`${this.base}/api/results`);
   }
 
-  castVote(universityId: number, googleIdToken: string) {
+  requestMagicLink(email: string, turnstileToken?: string) {
+    return this.http.post<{
+      ok: boolean;
+      message: string;
+      emailMasked: string;
+      alreadyVoted: boolean;
+      expiresInSeconds: number;
+      mailDelivered?: boolean;
+      magicUrlDev?: string;
+      devHint?: string;
+    }>(`${this.base}/api/auth/request-link`, {
+      email,
+      turnstileToken: turnstileToken || undefined,
+    });
+  }
+
+  consumeMagicLink(token: string) {
+    return this.http.post<{
+      ok: boolean;
+      accessToken: string;
+      email: string;
+      emailMasked: string;
+      voted: boolean;
+      universityId: number | null;
+      universityName: string | null;
+    }>(`${this.base}/api/auth/consume-link`, { token });
+  }
+
+  castVote(universityId: number) {
     return this.http.post<{
       ok: boolean;
       universityName: string;
       message: string;
-    }>(`${this.base}/api/votes`, { universityId, googleIdToken });
+    }>(
+      `${this.base}/api/votes`,
+      { universityId },
+      { headers: this.voterHeaders() },
+    );
   }
 
-  voteStatus(googleIdToken: string) {
-    return this.http.post<
-      | { voted: false }
-      | { voted: true; universityId: number; universityName: string }
-    >(`${this.base}/api/votes/status`, { googleIdToken });
+  voteStatus() {
+    return this.http.get<
+      | { voted: false; email: string }
+      | {
+          voted: true;
+          email: string;
+          universityId: number;
+          universityName: string;
+        }
+    >(`${this.base}/api/votes/status`, { headers: this.voterHeaders() });
   }
 
   adminLogin(username: string, password: string) {

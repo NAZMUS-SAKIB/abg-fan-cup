@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { GoogleAuthService } from '../google/google-auth.service';
 import { ResultsService } from '../results/results.service';
 import { CastVoteDto } from './dto/cast-vote.dto';
 
@@ -14,12 +13,16 @@ import { CastVoteDto } from './dto/cast-vote.dto';
 export class VotesService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly googleAuth: GoogleAuthService,
     private readonly results: ResultsService,
   ) {}
 
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+  }
+
   async castVote(
     dto: CastVoteDto,
+    email: string,
     ip: string | undefined,
     userAgent: string | undefined,
   ) {
@@ -28,7 +31,7 @@ export class VotesService {
       throw new ForbiddenException('Voting is closed.');
     }
 
-    const identity = await this.googleAuth.verifyIdToken(dto.googleIdToken);
+    const voterEmail = this.normalizeEmail(email);
 
     const university = await this.prisma.university.findUnique({
       where: { id: dto.universityId },
@@ -42,8 +45,7 @@ export class VotesService {
         const created = await tx.vote.create({
           data: {
             universityId: dto.universityId,
-            googleSub: identity.googleSub,
-            email: identity.email,
+            email: voterEmail,
             ip: ip?.slice(0, 64),
             userAgent: userAgent?.slice(0, 512),
           },
@@ -72,24 +74,25 @@ export class VotesService {
         err.code === 'P2002'
       ) {
         throw new ConflictException(
-          'This Google account has already cast a vote.',
+          'This email has already cast a vote.',
         );
       }
       throw err;
     }
   }
 
-  async hasVoted(googleIdToken: string) {
-    const identity = await this.googleAuth.verifyIdToken(googleIdToken);
+  async hasVoted(email: string) {
+    const voterEmail = this.normalizeEmail(email);
     const existing = await this.prisma.vote.findUnique({
-      where: { googleSub: identity.googleSub },
+      where: { email: voterEmail },
       include: { university: true },
     });
     if (!existing) {
-      return { voted: false as const };
+      return { voted: false as const, email: voterEmail };
     }
     return {
       voted: true as const,
+      email: voterEmail,
       universityId: existing.universityId,
       universityName: existing.university.name,
     };

@@ -7,6 +7,23 @@
   --orange2: #ff5a1f;
   --cream: #f4f1ea;
   --line: #e4e9f0;
+  --text: #12233d;
+  --muted: #52637a;
+  --card: #ffffff;
+  --card-soft: #fffaf1;
+}
+
+html.theme-night {
+  --navy: #9ec1ff;
+  --navy2: #061426;
+  --orange: #ffb347;
+  --orange2: #ff6b35;
+  --cream: #07111f;
+  --line: #1e334d;
+  --text: #e8eef7;
+  --muted: #9aafc4;
+  --card: #0f2138;
+  --card-soft: #152a45;
 }
 
 *,
@@ -23,8 +40,9 @@ body {
 
 body {
   font-family: "Manrope", system-ui, sans-serif;
-  color: #12233d;
+  color: var(--text);
   background: var(--cream);
+  transition: background 0.25s ease, color 0.25s ease;
 }
 
 button,
@@ -34,4 +52,21 @@ input {
 
 a {
   color: inherit;
+}
+
+
+html.motion-reduce *,
+html.motion-reduce *::before,
+html.motion-reduce *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+html.density-compact .vote-card,
+html.density-compact .period-stats,
+html.density-compact .total {
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
 }

@@ -21,8 +21,7 @@ model University {
 model Vote {
   id           Int        @id @default(autoincrement())
   universityId Int        @map("university_id")
-  googleSub    String     @unique @map("google_sub")
-  email        String?
+  email        String     @unique
   ip           String?
   userAgent    String?    @map("user_agent")
   createdAt    DateTime   @default(now()) @map("created_at")
@@ -31,6 +30,20 @@ model Vote {
   @@index([universityId])
   @@index([createdAt])
   @@map("votes")
+}
+
+model MagicLinkToken {
+  id        Int       @id @default(autoincrement())
+  email     String
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  ip        String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([createdAt])
+  @@map("magic_link_tokens")
 }
 
 model VoteCount {

@@ -181,7 +181,6 @@ export class AdminService {
       { header: 'ID', key: 'id', width: 10 },
       { header: 'University', key: 'university', width: 48 },
       { header: 'Email', key: 'email', width: 36 },
-      { header: 'Google Sub', key: 'googleSub', width: 28 },
       { header: 'IP', key: 'ip', width: 18 },
       { header: 'Voted At (UTC)', key: 'createdAt', width: 24 },
     ];
@@ -189,8 +188,7 @@ export class AdminService {
       detail.addRow({
         id: v.id,
         university: v.university.name,
-        email: v.email ?? '',
-        googleSub: v.googleSub,
+        email: v.email,
         ip: v.ip ?? '',
         createdAt: v.createdAt.toISOString(),
       });

@@ -1,20 +1,40 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { ResultsService } from './results.service';
 
 @Controller('api')
 export class ResultsController {
+  private readonly logger = new Logger(ResultsController.name);
+
   constructor(private readonly resultsService: ResultsService) {}
 
   @Get('results')
   @SkipThrottle()
-  results() {
-    return this.resultsService.getResults();
+  async results() {
+    try {
+      return await this.resultsService.getResults();
+    } catch (err) {
+      this.logger.error(`GET /api/results: ${String(err)}`);
+      return {
+        totalVotes: 0,
+        updatedAt: new Date().toISOString(),
+        votingEndsAt: new Date('2026-11-10T17:59:59.000Z').toISOString(),
+        votingOpen: true,
+        universities: [],
+        dailyVotes: [],
+        periodStats: this.resultsService.emptyPeriodStats(),
+      };
+    }
   }
 
   @Get('universities')
   @SkipThrottle()
-  universities() {
-    return this.resultsService.listUniversities();
+  async universities() {
+    try {
+      return await this.resultsService.listUniversities();
+    } catch (err) {
+      this.logger.error(`GET /api/universities: ${String(err)}`);
+      return [];
+    }
   }
 }

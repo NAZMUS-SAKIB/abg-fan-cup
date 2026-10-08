@@ -10,9 +10,13 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: ALLOW_DEV_AUTH
-        value: "false"
-      - key: GOOGLE_CLIENT_ID
+      - key: FRONTEND_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
         sync: false
       - key: DATABASE_URL
         sync: false

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { GoogleAuthService } from '../google/google-auth.service';
+import { AuthModule } from '../auth/auth.module';
 import { ResultsModule } from '../results/results.module';
 import { VotesController } from './votes.controller';
 import { VotesService } from './votes.service';
 
 @Module({
-  imports: [ResultsModule],
+  imports: [ResultsModule, AuthModule],
   controllers: [VotesController],
-  providers: [VotesService, GoogleAuthService],
+  providers: [VotesService],
 })
 export class VotesModule {}
