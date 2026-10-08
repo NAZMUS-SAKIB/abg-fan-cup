@@ -77,13 +77,43 @@
         </div>
       </div>
 
-      <div class="panel">
-        <h3>Voting end date</h3>
-        <p>Countdown on the home page follows this setting.</p>
-        <div class="inline-form">
-          <input type="datetime-local" [(ngModel)]="endLocal" />
-          <button type="button" class="btn-secondary" (click)="saveEndDate()">Save</button>
+      <div class="panel end-panel" *ngIf="summary as s">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="panel-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7Z"/></svg>
+            </span>
+            <div>
+              <h3>Voting end date</h3>
+              <p>The home page countdown and vote closing follow this time.</p>
+            </div>
+          </div>
+          <span class="status-pill" [class.open]="s.votingOpen" [class.closed]="!s.votingOpen">
+            <span class="dot"></span>{{ endStatusLabel }}
+          </span>
         </div>
+
+        <div class="end-current">
+          <span class="end-current-label">Currently ends</span>
+          <strong>{{ currentEndLabel }}</strong>
+          <span class="tz">Asia/Dhaka (GMT+6)</span>
+        </div>
+
+        <div class="end-form">
+          <label class="field">
+            <span class="field-label">New end date &amp; time</span>
+            <input type="datetime-local" [(ngModel)]="endLocal" (ngModelChange)="endMsg = ''; endErr = ''" />
+          </label>
+          <div class="end-actions">
+            <button type="button" class="btn-text" *ngIf="endDirty && !endSaving" (click)="resetEndDate()">Reset</button>
+            <button type="button" class="btn-primary" [disabled]="!endDirty || endSaving" (click)="saveEndDate()">
+              {{ endSaving ? 'Saving…' : 'Save changes' }}
+            </button>
+          </div>
+        </div>
+
+        <p class="inline-msg ok" *ngIf="endMsg">{{ endMsg }}</p>
+        <p class="inline-msg err" *ngIf="endErr">{{ endErr }}</p>
       </div>
 
       <div class="panel">

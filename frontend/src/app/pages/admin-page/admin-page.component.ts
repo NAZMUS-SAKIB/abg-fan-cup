@@ -25,6 +25,10 @@ export class AdminPageComponent implements OnInit, OnDestroy {
   success = '';
   loading = false;
   endLocal = '';
+  savedEndLocal = '';
+  endSaving = false;
+  endMsg = '';
+  endErr = '';
   newUniName = '';
   editingId: number | null = null;
   editingName = '';
@@ -100,6 +104,7 @@ export class AdminPageComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.summary = data;
         this.endLocal = this.toLocalInput(data.votingEndsAt);
+        this.savedEndLocal = this.endLocal;
         this.authReady = true;
         this.verifying = false;
         this.error = '';
@@ -117,19 +122,54 @@ export class AdminPageComponent implements OnInit, OnDestroy {
     });
   }
 
+  get endDirty(): boolean {
+    return !!this.endLocal && this.endLocal !== this.savedEndLocal;
+  }
+
+  get currentEndLabel(): string {
+    const iso = this.summary?.votingEndsAt;
+    if (!iso) return '—';
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Dhaka',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).format(new Date(iso));
+  }
+
+  get endStatusLabel(): string {
+    const iso = this.summary?.votingEndsAt;
+    if (!iso || !this.summary?.votingOpen) return 'Voting closed';
+    const ms = Date.parse(iso) - Date.now();
+    const days = Math.floor(ms / 86_400_000);
+    if (days >= 1) return `Open · ${days} day${days === 1 ? '' : 's'} left`;
+    const hours = Math.max(1, Math.floor(ms / 3_600_000));
+    return `Open · ${hours} hour${hours === 1 ? '' : 's'} left`;
+  }
+
+  resetEndDate() {
+    this.endLocal = this.savedEndLocal;
+    this.endMsg = '';
+    this.endErr = '';
+  }
+
   saveEndDate() {
-    if (!this.token || !this.endLocal) return;
-    this.error = '';
-    this.success = '';
+    if (!this.token || !this.endDirty || this.endSaving) return;
+    this.endMsg = '';
+    this.endErr = '';
     const date = new Date(this.endLocal);
     if (Number.isNaN(date.getTime())) {
-      this.error = 'Please pick a valid date and time.';
+      this.endErr = 'Please pick a valid date and time.';
       return;
     }
-    const iso = date.toISOString();
-    this.api.updateVotingEnd(this.token, iso).subscribe({
+    this.endSaving = true;
+    this.api.updateVotingEnd(this.token, date.toISOString()).subscribe({
       next: (res) => {
-        this.success = 'Voting end date updated.';
+        this.endSaving = false;
         if (this.summary) {
           this.summary = {
             ...this.summary,
@@ -137,9 +177,15 @@ export class AdminPageComponent implements OnInit, OnDestroy {
             votingOpen: res.votingOpen,
           };
         }
+        this.endLocal = this.toLocalInput(res.votingEndsAt);
+        this.savedEndLocal = this.endLocal;
+        this.endMsg = res.votingOpen
+          ? 'Saved. The countdown is updated for all visitors.'
+          : 'Saved. This time is in the past, so voting is now closed.';
       },
       error: (err) => {
-        this.error = this.formatHttpError(err, 'Could not update voting end date.');
+        this.endSaving = false;
+        this.endErr = this.formatHttpError(err, 'Could not update voting end date.');
       },
     });
   }
