@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -15,34 +16,62 @@ import { VotesService } from './votes.service';
 
 type VoterRequest = Request & { user?: { email: string; role: 'voter' } };
 
+function clientIp(req: Request): string | undefined {
+  return (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip
+  );
+}
+
 @Controller('api/votes')
-@UseGuards(AuthGuard('voter-jwt'))
 export class VotesController {
   constructor(private readonly votesService: VotesService) {}
 
   @Post()
+  @UseGuards(AuthGuard('voter-jwt'))
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   cast(
     @Body() dto: CastVoteDto,
     @Req() req: VoterRequest,
     @Headers('user-agent') userAgent?: string,
   ) {
-    const ip =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-      req.ip;
-    return this.votesService.castVote(dto, req.user!.email, ip, userAgent);
+    return this.votesService.castWithEmail(
+      dto,
+      req.user!.email,
+      clientIp(req),
+      userAgent,
+    );
+  }
+
+  @Post('open')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  castOpen(
+    @Body() dto: CastVoteDto,
+    @Req() req: Request,
+    @Headers('user-agent') userAgent?: string,
+  ) {
+    return this.votesService.castOpen(dto, clientIp(req), userAgent);
   }
 
   @Get('status')
+  @UseGuards(AuthGuard('voter-jwt'))
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   status(@Req() req: VoterRequest) {
-    return this.votesService.hasVoted(req.user!.email);
+    return this.votesService.hasVotedByEmail(req.user!.email);
   }
 
-  /** @deprecated Prefer GET /status — kept briefly for older clients */
+  @Get('open-status')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  openStatus(
+    @Query('deviceKey') deviceKey?: string,
+    @Query('fingerprintHash') fingerprintHash?: string,
+  ) {
+    return this.votesService.hasVotedOpen(deviceKey, fingerprintHash);
+  }
+
   @Post('status')
+  @UseGuards(AuthGuard('voter-jwt'))
   @Throttle({ default: { limit: 60, ttl: 60000 } })
   statusPost(@Req() req: VoterRequest) {
-    return this.votesService.hasVoted(req.user!.email);
+    return this.votesService.hasVotedByEmail(req.user!.email);
   }
 }

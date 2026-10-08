@@ -20,6 +20,7 @@ export class ResultsController {
         updatedAt: new Date().toISOString(),
         votingEndsAt: new Date('2026-11-10T17:59:59.000Z').toISOString(),
         votingOpen: true,
+        magicLinkRequired: true,
         universities: [],
         dailyVotes: [],
         periodStats: this.resultsService.emptyPeriodStats(),

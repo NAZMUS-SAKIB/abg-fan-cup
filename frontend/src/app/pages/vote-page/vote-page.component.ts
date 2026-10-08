@@ -16,6 +16,7 @@ import {
   ResultsPayload,
   University,
 } from '../../core/api.service';
+import { DeviceFingerprintService } from '../../core/device-fingerprint.service';
 import { VoterSessionService } from '../../core/voter-session.service';
 import { environment } from '../../../environments/environment';
 
@@ -47,6 +48,7 @@ declare global {
 })
 export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('turnstileHost') turnstileHost?: ElementRef<HTMLDivElement>;
+  @ViewChild('modalTurnstileHost') modalTurnstileHost?: ElementRef<HTMLDivElement>;
 
   universities: University[] = [];
   results: ResultsPayload | null = null;
@@ -56,6 +58,11 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   authStep: AuthStep = 'email';
   turnstileToken = '';
   turnstileEnabled = !!environment.turnstileSiteKey;
+  magicLinkRequired = true;
+  robotChecked = false;
+  humanVerified = false;
+  verifyModalOpen = false;
+  modalTurnstileToken = '';
   alreadyVoted = false;
   votedUniversityName = '';
   loading = false;
@@ -120,7 +127,14 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   private areaHovered = false;
   private pendingResults: ResultsPayload | null = null;
   private turnstileWidgetId: string | null = null;
+  private modalTurnstileWidgetId: string | null = null;
   private readonly motionListener = () => this.onMotionPreferenceChange();
+  private readonly magicModeListener = (e: Event) => {
+    const detail = (e as CustomEvent).detail as { magicLinkRequired?: boolean };
+    if (typeof detail?.magicLinkRequired === 'boolean') {
+      this.onMagicModeChange(detail.magicLinkRequired);
+    }
+  };
   private readonly colors = [
     '#ff9f1c',
     '#ff5a1f',
@@ -137,7 +151,21 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private readonly api: ApiService,
     private readonly session: VoterSessionService,
+    private readonly deviceFp: DeviceFingerprintService,
   ) {}
+
+  get canSelectUniversity(): boolean {
+    if (this.alreadyVoted || this.loading || !this.votingOpen) return false;
+    return this.magicLinkRequired ? this.authStep === 'ready' : true;
+  }
+
+  get canCast(): boolean {
+    if (this.alreadyVoted || this.loading || !this.selectedId || !this.votingOpen) {
+      return false;
+    }
+    if (this.magicLinkRequired) return this.authStep === 'ready';
+    return this.humanVerified;
+  }
 
   ngOnInit(): void {
     this.error = 'Connecting to server… (first load may take up to a minute)';
@@ -159,20 +187,15 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
             'Could not reach the voting server. Wait 30 seconds and refresh the page.'),
       });
 
-    this.pollSub = interval(2000)
-      .pipe(
-        startWith(0),
-        switchMap(() => this.api.getResults()),
-      )
-      .subscribe({
-        next: (data) => this.applyResults(data),
-        error: () => {},
-      });
+    this.startResultsPolling();
+    document.addEventListener('visibilitychange', this.visibilityListener);
 
     this.countdownSub = interval(1000).subscribe(() => this.tickCountdown());
 
     this.syncChartMotion();
     window.addEventListener('abg-motion-change', this.motionListener);
+    window.addEventListener('abg-magic-mode', this.magicModeListener);
+    window.addEventListener('keydown', this.escapeListener);
 
     const magic = this.readMagicFromUrl();
     if (magic) {
@@ -195,6 +218,35 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
     this.countdownSub?.unsubscribe();
     this.resendSub?.unsubscribe();
     window.removeEventListener('abg-motion-change', this.motionListener);
+    window.removeEventListener('abg-magic-mode', this.magicModeListener);
+    window.removeEventListener('keydown', this.escapeListener);
+    document.removeEventListener('visibilitychange', this.visibilityListener);
+  }
+
+  private readonly visibilityListener = () => {
+    if (document.hidden) {
+      this.pollSub?.unsubscribe();
+      this.pollSub = undefined;
+    } else {
+      this.startResultsPolling();
+    }
+  };
+
+  private readonly escapeListener = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && this.verifyModalOpen) this.closeVerifyModal();
+  };
+
+  private startResultsPolling() {
+    this.pollSub?.unsubscribe();
+    this.pollSub = interval(5000)
+      .pipe(
+        startWith(0),
+        switchMap(() => this.api.getResults()),
+      )
+      .subscribe({
+        next: (data) => this.applyResults(data),
+        error: () => {},
+      });
   }
 
   sendMagicLink() {
@@ -266,10 +318,40 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   select(id: number) {
-    if (this.alreadyVoted || this.loading || !this.votingOpen || this.authStep !== 'ready') {
+    if (!this.canSelectUniversity) return;
+    this.selectedId = id;
+    this.error = '';
+  }
+
+  onRobotCheck(ev: Event) {
+    const checked = !!(ev.target as HTMLInputElement).checked;
+    this.robotChecked = checked;
+    if (!checked) {
+      this.humanVerified = false;
+      this.modalTurnstileToken = '';
+      this.verifyModalOpen = false;
       return;
     }
-    this.selectedId = id;
+    this.verifyModalOpen = true;
+    this.humanVerified = false;
+    setTimeout(() => this.renderModalTurnstile(), 0);
+  }
+
+  closeVerifyModal() {
+    this.verifyModalOpen = false;
+    if (!this.humanVerified) {
+      this.robotChecked = false;
+      this.modalTurnstileToken = '';
+    }
+  }
+
+  confirmHumanVerify() {
+    if (this.turnstileEnabled && !this.modalTurnstileToken) {
+      this.error = 'Complete the verification challenge.';
+      return;
+    }
+    this.humanVerified = true;
+    this.verifyModalOpen = false;
     this.error = '';
   }
 
@@ -282,38 +364,90 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
       this.error = 'Select a university first.';
       return;
     }
-    if (this.authStep !== 'ready' || !this.session.getToken()) {
-      this.error = 'Confirm your email before voting.';
+    if (this.magicLinkRequired) {
+      if (this.authStep !== 'ready' || !this.session.getToken()) {
+        this.error = 'Confirm your email before voting.';
+        return;
+      }
+      this.loading = true;
+      this.error = '';
+      this.api.castVote(this.selectedId).subscribe({
+        next: (res) => this.onCastSuccess(res),
+        error: (err) => this.onCastError(err, true),
+      });
+      return;
+    }
+
+    if (!this.humanVerified) {
+      this.error = 'Confirm you are not a robot first.';
       return;
     }
     this.loading = true;
     this.error = '';
-    this.api.castVote(this.selectedId).subscribe({
-      next: (res) => {
-        this.loading = false;
-        this.alreadyVoted = true;
-        this.votedUniversityName = res.universityName || '';
-        this.message = res.message || 'Your vote was recorded.';
-        this.showCelebration = true;
-        this.shareHint = '';
-        this.api.getResults().subscribe({
-          next: (data) => this.applyResults(data),
-          error: () => {},
+    const deviceKey = this.deviceFp.getDeviceKey();
+    this.deviceFp.getFingerprintHash().then((fingerprintHash) => {
+      this.api
+        .castOpenVote({
+          universityId: this.selectedId!,
+          deviceKey,
+          fingerprintHash,
+          turnstileToken: this.modalTurnstileToken || undefined,
+        })
+        .subscribe({
+          next: (res) => this.onCastSuccess(res),
+          error: (err) => this.onCastError(err, false),
         });
-      },
-      error: (err) => {
-        this.loading = false;
-        this.error = this.errMsg(err, 'Vote failed. Try again.');
-        if (err?.status === 409) {
-          this.alreadyVoted = true;
-          this.showCelebration = true;
-        }
-        if (err?.status === 403) this.votingOpen = false;
-        if (err?.status === 401) {
-          this.session.clear();
-          this.authStep = 'email';
-        }
-      },
+    });
+  }
+
+  private onCastSuccess(res: { universityName: string; message: string }) {
+    this.loading = false;
+    this.alreadyVoted = true;
+    this.votedUniversityName = res.universityName || '';
+    this.message = res.message || 'Your vote was recorded.';
+    this.showCelebration = true;
+    this.shareHint = '';
+    this.api.getResults().subscribe({
+      next: (data) => this.applyResults(data),
+      error: () => {},
+    });
+  }
+
+  private onCastError(err: unknown, magicPath: boolean) {
+    this.loading = false;
+    this.error = this.errMsg(err, 'Vote failed. Try again.');
+    const status = (err as { status?: number })?.status;
+    if (status === 409) {
+      this.alreadyVoted = true;
+      this.showCelebration = true;
+    }
+    if (status === 403) this.votingOpen = false;
+    if (magicPath && status === 401) {
+      this.session.clear();
+      this.authStep = 'email';
+    }
+  }
+
+  private onMagicModeChange(required: boolean) {
+    this.magicLinkRequired = required;
+    if (!required) {
+      this.checkOpenVoteStatus();
+    }
+  }
+
+  private checkOpenVoteStatus() {
+    const deviceKey = this.deviceFp.getDeviceKey();
+    this.deviceFp.getFingerprintHash().then((fingerprintHash) => {
+      this.api.openVoteStatus(deviceKey, fingerprintHash).subscribe({
+        next: (status) => {
+          if (status.voted) {
+            this.alreadyVoted = true;
+            this.votedUniversityName = status.universityName;
+            this.message = `You already voted for ${status.universityName}.`;
+          }
+        },
+        error: () => {},
+      });
     });
   }
 
@@ -484,6 +618,30 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
     });
   }
 
+  private renderModalTurnstile() {
+    if (!this.turnstileEnabled) return;
+    if (!window.turnstile) {
+      this.loadTurnstile()
+        .then(() => this.renderModalTurnstile())
+        .catch(() => {});
+      return;
+    }
+    if (!this.modalTurnstileHost?.nativeElement) return;
+    const host = this.modalTurnstileHost.nativeElement;
+    host.innerHTML = '';
+    this.modalTurnstileToken = '';
+    this.modalTurnstileWidgetId = window.turnstile.render(host, {
+      sitekey: environment.turnstileSiteKey,
+      callback: (token: string) => {
+        this.modalTurnstileToken = token;
+      },
+      'expired-callback': () => {
+        this.modalTurnstileToken = '';
+      },
+      theme: 'light',
+    });
+  }
+
   private resetTurnstile() {
     this.turnstileToken = '';
     if (this.turnstileWidgetId && window.turnstile) {
@@ -542,6 +700,16 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
   private applyResults(data: ResultsPayload | null | undefined) {
     if (!data || typeof data !== 'object') return;
 
+    // Skip redundant chart rebuilds when payload unchanged
+    if (
+      this.results?.updatedAt === data.updatedAt &&
+      this.results?.totalVotes === data.totalVotes &&
+      this.results?.magicLinkRequired === data.magicLinkRequired &&
+      this.results?.votingOpen === data.votingOpen
+    ) {
+      return;
+    }
+
     const universities = Array.isArray(data.universities) ? data.universities : [];
     const dailyVotes = Array.isArray(data.dailyVotes) ? data.dailyVotes : [];
     const periodStats = this.normalizePeriodStats(data.periodStats);
@@ -563,9 +731,16 @@ export class VotePageComponent implements OnInit, AfterViewInit, OnDestroy {
       periodStats,
     };
 
+    const prevMagic = this.magicLinkRequired;
+    const magicLinkRequired = data.magicLinkRequired !== false;
+
     this.pendingResults = normalized;
-    this.results = normalized;
+    this.results = { ...normalized, magicLinkRequired };
     this.votingOpen = votingOpen;
+    this.magicLinkRequired = magicLinkRequired;
+    if (prevMagic && !magicLinkRequired) {
+      this.checkOpenVoteStatus();
+    }
     this.endsAtMs = Number.isFinite(endsMs) ? endsMs : 0;
     this.tickCountdown();
     this.syncChartMotion();

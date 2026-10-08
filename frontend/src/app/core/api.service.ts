@@ -1,4 +1,4 @@
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -11,6 +11,7 @@ export type ResultsPayload = {
   updatedAt: string;
   votingEndsAt: string;
   votingOpen: boolean;
+  magicLinkRequired?: boolean;
   universities: Array<{
     id: number;
     name: string;
@@ -38,9 +39,7 @@ export class ApiService {
 
   private voterHeaders(): HttpHeaders {
     const token = this.session.getToken();
-    return new HttpHeaders(
-      token ? { Authorization: `Bearer ${token}` } : {},
-    );
+    return new HttpHeaders(token ? { Authorization: `Bearer ${token}` } : {});
   }
 
   getUniversities(): Observable<University[]> {
@@ -91,6 +90,19 @@ export class ApiService {
     );
   }
 
+  castOpenVote(body: {
+    universityId: number;
+    deviceKey: string;
+    fingerprintHash: string;
+    turnstileToken?: string;
+  }) {
+    return this.http.post<{
+      ok: boolean;
+      universityName: string;
+      message: string;
+    }>(`${this.base}/api/votes/open`, body);
+  }
+
   voteStatus() {
     return this.http.get<
       | { voted: false; email: string }
@@ -101,6 +113,16 @@ export class ApiService {
           universityName: string;
         }
     >(`${this.base}/api/votes/status`, { headers: this.voterHeaders() });
+  }
+
+  openVoteStatus(deviceKey: string, fingerprintHash: string) {
+    const params = new HttpParams()
+      .set('deviceKey', deviceKey)
+      .set('fingerprintHash', fingerprintHash);
+    return this.http.get<
+      | { voted: false }
+      | { voted: true; universityId: number; universityName: string }
+    >(`${this.base}/api/votes/open-status`, { params });
   }
 
   adminLogin(username: string, password: string) {
@@ -124,6 +146,14 @@ export class ApiService {
     );
   }
 
+  updateMagicLinkRequired(token: string, magicLinkRequired: boolean) {
+    return this.http.post<{ magicLinkRequired: boolean }>(
+      `${this.base}/api/admin/voting-settings/magic-link`,
+      { magicLinkRequired },
+      { headers: new HttpHeaders({ Authorization: `Bearer ${token}` }) },
+    );
+  }
+
   downloadExcel(token: string): Observable<Blob> {
     return this.http.get(`${this.base}/api/admin/export.xlsx`, {
       headers: new HttpHeaders({ Authorization: `Bearer ${token}` }),
@@ -140,8 +170,8 @@ export class ApiService {
   }
 
   renameUniversity(token: string, id: number, name: string) {
-    return this.http.patch<University>(
-      `${this.base}/api/admin/universities/${id}`,
+    return this.http.post<University>(
+      `${this.base}/api/admin/universities/${id}/rename`,
       { name },
       { headers: new HttpHeaders({ Authorization: `Bearer ${token}` }) },
     );

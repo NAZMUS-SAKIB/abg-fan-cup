@@ -14,6 +14,7 @@ export type ResultsPayload = {
   updatedAt: string;
   votingEndsAt: string;
   votingOpen: boolean;
+  magicLinkRequired: boolean;
   universities: Array<{
     id: number;
     name: string;
@@ -35,7 +36,8 @@ export class ResultsService {
   private readonly logger = new Logger(ResultsService.name);
   private cache: ResultsPayload | null = null;
   private cacheAt = 0;
-  private readonly ttlMs = 1500;
+  /** Longer TTL under concurrent load; clients poll ~5s */
+  private readonly ttlMs = 4000;
   private readonly defaultEndsAt = new Date('2026-11-10T17:59:59.000Z');
 
   constructor(private readonly prisma: PrismaService) {}
@@ -55,19 +57,36 @@ export class ResultsService {
     }));
   }
 
-  async getVotingEndsAt(): Promise<Date> {
+  async getSettingRow() {
     try {
-      const setting = await this.prisma.setting.findUnique({ where: { id: 1 } });
-      if (setting?.votingEndsAt instanceof Date && !Number.isNaN(setting.votingEndsAt.getTime())) {
-        return setting.votingEndsAt;
+      let setting = await this.prisma.setting.findUnique({ where: { id: 1 } });
+      if (!setting) {
+        setting = await this.prisma.setting.create({
+          data: {
+            id: 1,
+            votingEndsAt: this.defaultEndsAt,
+            magicLinkRequired: true,
+          },
+        });
       }
-      await this.prisma.setting.create({
-        data: { id: 1, votingEndsAt: this.defaultEndsAt },
-      });
+      return setting;
     } catch (err) {
-      this.logger.warn(`getVotingEndsAt fallback: ${String(err)}`);
+      this.logger.warn(`getSettingRow fallback: ${String(err)}`);
+      return null;
+    }
+  }
+
+  async getVotingEndsAt(): Promise<Date> {
+    const setting = await this.getSettingRow();
+    if (setting?.votingEndsAt instanceof Date && !Number.isNaN(setting.votingEndsAt.getTime())) {
+      return setting.votingEndsAt;
     }
     return this.defaultEndsAt;
+  }
+
+  async isMagicLinkRequired(): Promise<boolean> {
+    const setting = await this.getSettingRow();
+    return setting?.magicLinkRequired !== false;
   }
 
   async isVotingOpen(): Promise<boolean> {
@@ -79,10 +98,21 @@ export class ResultsService {
     const updated = await this.prisma.setting.upsert({
       where: { id: 1 },
       update: { votingEndsAt },
-      create: { id: 1, votingEndsAt },
+      create: { id: 1, votingEndsAt, magicLinkRequired: true },
     });
     this.invalidateCache();
     return updated.votingEndsAt;
+  }
+
+  async setMagicLinkRequired(magicLinkRequired: boolean): Promise<boolean> {
+    const ends = await this.getVotingEndsAt();
+    const updated = await this.prisma.setting.upsert({
+      where: { id: 1 },
+      update: { magicLinkRequired },
+      create: { id: 1, votingEndsAt: ends, magicLinkRequired },
+    });
+    this.invalidateCache();
+    return updated.magicLinkRequired;
   }
 
   async getResults(): Promise<ResultsPayload> {
@@ -92,6 +122,7 @@ export class ResultsService {
       return {
         ...this.cache,
         votingOpen: Number.isFinite(endsMs) ? now < endsMs : false,
+        magicLinkRequired: this.cache.magicLinkRequired !== false,
         periodStats: Array.isArray(this.cache.periodStats)
           ? this.cache.periodStats
           : this.emptyPeriodStats(),
@@ -101,20 +132,22 @@ export class ResultsService {
     }
 
     try {
-      const [rows, votingEndsAt, votes] = await Promise.all([
+      const [rows, setting, dailyRaw, periodRaw] = await Promise.all([
         this.prisma.university.findMany({
           orderBy: { sortOrder: 'asc' },
           include: { count: true },
         }),
-        this.getVotingEndsAt(),
-        this.prisma.vote.findMany({
-          select: { createdAt: true, universityId: true },
-          orderBy: { createdAt: 'asc' },
-        }),
+        this.getSettingRow(),
+        this.queryDailyVotes(),
+        this.queryPeriodLeaderRows(),
       ]);
+      const votingEndsAt =
+        setting?.votingEndsAt instanceof Date && !Number.isNaN(setting.votingEndsAt.getTime())
+          ? setting.votingEndsAt
+          : this.defaultEndsAt;
+      const magicLinkRequired = setting?.magicLinkRequired !== false;
 
       const safeRows = Array.isArray(rows) ? rows : [];
-      const safeVotes = Array.isArray(votes) ? votes : [];
       const nameById = new Map<number, string>();
       for (const u of safeRows) {
         if (typeof u?.id === 'number' && typeof u?.name === 'string' && u.name.trim()) {
@@ -141,21 +174,19 @@ export class ResultsService {
           ? votingEndsAt
           : this.defaultEndsAt;
 
-      let dailyVotes: ResultsPayload['dailyVotes'] = [{ date: this.toDhakaDateKey(new Date()), votes: 0 }];
+      let dailyVotes: ResultsPayload['dailyVotes'] = [
+        { date: this.toDhakaDateKey(new Date()), votes: 0 },
+      ];
       let periodStats = this.emptyPeriodStats();
       try {
-        dailyVotes = this.buildDailyVotes(
-          safeVotes
-            .map((v) => v?.createdAt)
-            .filter((d): d is Date => d instanceof Date && !Number.isNaN(d.getTime())),
-        );
+        dailyVotes = this.fillDailySeries(dailyRaw);
       } catch (err) {
-        this.logger.warn(`buildDailyVotes failed: ${String(err)}`);
+        this.logger.warn(`dailyVotes failed: ${String(err)}`);
       }
       try {
-        periodStats = this.buildPeriodStats(safeVotes, nameById);
+        periodStats = this.mapPeriodStats(periodRaw, nameById);
       } catch (err) {
-        this.logger.warn(`buildPeriodStats failed: ${String(err)}`);
+        this.logger.warn(`periodStats failed: ${String(err)}`);
         periodStats = this.emptyPeriodStats();
       }
 
@@ -164,6 +195,7 @@ export class ResultsService {
         updatedAt: new Date().toISOString(),
         votingEndsAt: ends.toISOString(),
         votingOpen: Date.now() < ends.getTime(),
+        magicLinkRequired,
         universities,
         dailyVotes,
         periodStats,
@@ -183,6 +215,7 @@ export class ResultsService {
         updatedAt: new Date().toISOString(),
         votingEndsAt: this.defaultEndsAt.toISOString(),
         votingOpen: Date.now() < this.defaultEndsAt.getTime(),
+        magicLinkRequired: true,
         universities: [],
         dailyVotes: [{ date: this.toDhakaDateKey(new Date()), votes: 0 }],
         periodStats: this.emptyPeriodStats(),
@@ -202,90 +235,100 @@ export class ResultsService {
     }
   }
 
-  private buildPeriodStats(
-    votes: Array<{ createdAt: Date; universityId: number }>,
+  /** Aggregate in DB — avoids loading every vote row into memory */
+  private async queryDailyVotes(): Promise<Array<{ date: string; votes: number }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ date: string; votes: bigint | number }>>`
+      SELECT to_char((created_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Dhaka', 'YYYY-MM-DD') AS date,
+             COUNT(*)::int AS votes
+      FROM votes
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    return (rows || []).map((r) => ({
+      date: String(r.date),
+      votes: Number(r.votes) || 0,
+    }));
+  }
+
+  private async queryPeriodLeaderRows(): Promise<
+    Array<{ windowKey: string; universityId: number; votes: number }>
+  > {
+    const out: Array<{ windowKey: string; universityId: number; votes: number }> = [];
+    await Promise.all(
+      PERIOD_WINDOWS.map(async ({ key, ms }) => {
+        const since = new Date(Date.now() - ms);
+        const grouped = await this.prisma.vote.groupBy({
+          by: ['universityId'],
+          where: { createdAt: { gte: since } },
+          _count: { _all: true },
+        });
+        for (const g of grouped) {
+          out.push({
+            windowKey: key,
+            universityId: g.universityId,
+            votes: g._count._all,
+          });
+        }
+      }),
+    );
+    return out;
+  }
+
+  private mapPeriodStats(
+    rows: Array<{ windowKey: string; universityId: number; votes: number }>,
     nameById: Map<number, string>,
   ): PeriodStat[] {
-    const list = Array.isArray(votes) ? votes : [];
-    const now = Date.now();
-
-    return PERIOD_WINDOWS.map(({ key, label, ms }) => {
-      const since = now - ms;
-      const counts = new Map<number, number>();
-      let totalVotes = 0;
-
-      for (const v of list) {
-        if (!v || typeof v.universityId !== 'number' || !Number.isFinite(v.universityId)) continue;
-        const at = v.createdAt;
-        if (!(at instanceof Date) || Number.isNaN(at.getTime())) continue;
-        if (at.getTime() < since) continue;
-        totalVotes += 1;
-        counts.set(v.universityId, (counts.get(v.universityId) ?? 0) + 1);
-      }
-
+    const list = Array.isArray(rows) ? rows : [];
+    return PERIOD_WINDOWS.map(({ key, label }) => {
+      const bucket = list.filter((r) => r.windowKey === key && r.votes > 0);
+      const totalVotes = bucket.reduce((s, r) => s + r.votes, 0);
       if (totalVotes === 0) {
         return { key, label, totalVotes: 0, leaderName: null, leaderVotes: 0 };
       }
-
       let leaderId: number | null = null;
       let leaderVotes = 0;
-      for (const [uniId, count] of counts) {
-        if (count <= 0) continue;
-        const name = nameById.get(uniId) ?? '';
-        const leaderName = leaderId === null ? '' : (nameById.get(leaderId) ?? '');
+      for (const r of bucket) {
+        const name = nameById.get(r.universityId) ?? '';
+        const curLeaderName = leaderId === null ? '' : (nameById.get(leaderId) ?? '');
         if (
           leaderId === null ||
-          count > leaderVotes ||
-          (count === leaderVotes && name.localeCompare(leaderName) < 0)
+          r.votes > leaderVotes ||
+          (r.votes === leaderVotes && name.localeCompare(curLeaderName) < 0)
         ) {
-          leaderId = uniId;
-          leaderVotes = count;
+          leaderId = r.universityId;
+          leaderVotes = r.votes;
         }
       }
-
-      const leaderName =
-        leaderId === null
-          ? null
-          : nameById.get(leaderId) ?? `University #${leaderId}`;
-
       return {
         key,
         label,
         totalVotes,
-        leaderName,
+        leaderName:
+          leaderId === null
+            ? null
+            : nameById.get(leaderId) ?? `University #${leaderId}`,
         leaderVotes: leaderId === null ? 0 : leaderVotes,
       };
     });
   }
 
-  private buildDailyVotes(createdAts: Date[]): Array<{ date: string; votes: number }> {
-    if (!Array.isArray(createdAts) || createdAts.length === 0) {
+  private fillDailySeries(
+    points: Array<{ date: string; votes: number }>,
+  ): Array<{ date: string; votes: number }> {
+    if (!points.length) {
       return [{ date: this.toDhakaDateKey(new Date()), votes: 0 }];
     }
-
-    const counts = new Map<string, number>();
-    for (const at of createdAts) {
-      if (!(at instanceof Date) || Number.isNaN(at.getTime())) continue;
-      const key = this.toDhakaDateKey(at);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-
-    if (counts.size === 0) {
-      return [{ date: this.toDhakaDateKey(new Date()), votes: 0 }];
-    }
-
+    const counts = new Map(points.map((p) => [p.date, p.votes]));
     const keys = [...counts.keys()].sort();
     const start = keys[0];
     const end = this.toDhakaDateKey(new Date());
     const series: Array<{ date: string; votes: number }> = [];
-
     for (let cur = start; ; ) {
       series.push({ date: cur, votes: counts.get(cur) ?? 0 });
       if (cur === end) break;
       cur = this.nextDhakaDateKey(cur);
       if (series.length > 400) break;
     }
-
     return series;
   }
 

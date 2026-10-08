@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, HostListener, OnInit } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
-import { filter } from 'rxjs';
+import { Subscription, filter } from 'rxjs';
+import { AdminSessionService } from './core/admin-session.service';
+import { ApiService } from './core/api.service';
 import { SiteFooterComponent } from './shared/site-footer/site-footer.component';
 
 const THEME_KEY = 'abg_theme';
@@ -19,20 +21,32 @@ type DensityMode = 'comfortable' | 'compact';
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
   showDevCredit = false;
   settingsOpen = false;
   themeMode: ThemeMode = 'night';
   motionMode: MotionMode = 'full';
   densityMode: DensityMode = 'comfortable';
+  adminLoggedIn = false;
+  magicLinkRequired = true;
+  magicToggleBusy = false;
+  magicToggleError = '';
 
-  constructor(private readonly router: Router) {
-    this.router.events
-      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
-      .subscribe((e) => {
-        this.showDevCredit = e.urlAfterRedirects.startsWith('/admin');
-        this.settingsOpen = false;
-      });
+  private subs = new Subscription();
+
+  constructor(
+    private readonly router: Router,
+    private readonly adminSession: AdminSessionService,
+    private readonly api: ApiService,
+  ) {
+    this.subs.add(
+      this.router.events
+        .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+        .subscribe((e) => {
+          this.showDevCredit = e.urlAfterRedirects.startsWith('/admin');
+          this.settingsOpen = false;
+        }),
+    );
     this.showDevCredit = this.router.url.startsWith('/admin');
   }
 
@@ -41,6 +55,19 @@ export class AppComponent implements OnInit {
     this.motionMode = this.readMotion();
     this.densityMode = this.readDensity();
     this.applyAll();
+
+    this.subs.add(
+      this.adminSession.token$.subscribe((token) => {
+        this.adminLoggedIn = !!token;
+        if (token) this.refreshMagicFlag();
+      }),
+    );
+
+    this.refreshMagicFlag();
+  }
+
+  ngOnDestroy(): void {
+    this.subs.unsubscribe();
   }
 
   @HostListener('document:click')
@@ -50,6 +77,50 @@ export class AppComponent implements OnInit {
 
   toggleSettings(): void {
     this.settingsOpen = !this.settingsOpen;
+    if (this.settingsOpen && this.adminLoggedIn) this.refreshMagicFlag();
+  }
+
+  logoutAdmin(): void {
+    this.adminSession.clear();
+    this.settingsOpen = false;
+    if (this.router.url.startsWith('/admin')) {
+      this.router.navigateByUrl('/admin');
+    }
+  }
+
+  toggleMagicLink(): void {
+    this.setMagicLinkRequired(!this.magicLinkRequired);
+  }
+
+  setMagicLinkRequired(required: boolean): void {
+    const token = this.adminSession.getToken();
+    if (!token || this.magicToggleBusy) return;
+    if (required === this.magicLinkRequired) return;
+    this.magicToggleBusy = true;
+    this.magicToggleError = '';
+    this.api.updateMagicLinkRequired(token, required).subscribe({
+      next: (res) => {
+        this.magicLinkRequired = res.magicLinkRequired;
+        this.magicToggleBusy = false;
+        try {
+          window.dispatchEvent(
+            new CustomEvent('abg-magic-mode', {
+              detail: { magicLinkRequired: res.magicLinkRequired },
+            }),
+          );
+        } catch {
+          /* ignore */
+        }
+      },
+      error: (err) => {
+        this.magicToggleBusy = false;
+        const raw = err?.error?.message;
+        if (Array.isArray(raw) && raw.length) this.magicToggleError = raw.join(' ');
+        else if (typeof raw === 'string' && raw.trim()) this.magicToggleError = raw;
+        else if (err?.status === 401) this.magicToggleError = 'Session expired. Sign in again.';
+        else this.magicToggleError = err?.message || 'Could not update magic link setting.';
+      },
+    });
   }
 
   setTheme(mode: ThemeMode): void {
@@ -68,6 +139,15 @@ export class AppComponent implements OnInit {
     this.densityMode = mode;
     this.write(DENSITY_KEY, mode);
     this.applyDensity();
+  }
+
+  private refreshMagicFlag(): void {
+    this.api.getResults().subscribe({
+      next: (data) => {
+        this.magicLinkRequired = data.magicLinkRequired !== false;
+      },
+      error: () => {},
+    });
   }
 
   private readTheme(): ThemeMode {

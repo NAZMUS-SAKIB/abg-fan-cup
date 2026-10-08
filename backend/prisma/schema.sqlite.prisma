@@ -3,8 +3,10 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon: pooled URL for app; direct (non-pooler) for migrate advisory locks
+  directUrl = env("DIRECT_URL")
 }
 
 model University {
@@ -19,16 +21,19 @@ model University {
 }
 
 model Vote {
-  id           Int        @id @default(autoincrement())
-  universityId Int        @map("university_id")
-  email        String     @unique
-  ip           String?
-  userAgent    String?    @map("user_agent")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  university   University @relation(fields: [universityId], references: [id])
+  id              Int        @id @default(autoincrement())
+  universityId    Int        @map("university_id")
+  email           String?    @unique
+  deviceKey       String?    @unique @map("device_key")
+  fingerprintHash String?    @unique @map("fingerprint_hash")
+  ip              String?
+  userAgent       String?    @map("user_agent")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  university      University @relation(fields: [universityId], references: [id])
 
   @@index([universityId])
   @@index([createdAt])
+  @@index([ip])
   @@map("votes")
 }
 
@@ -65,8 +70,9 @@ model Admin {
 }
 
 model Setting {
-  id           Int      @id @default(1)
-  votingEndsAt DateTime @map("voting_ends_at")
+  id                Int      @id @default(1)
+  votingEndsAt      DateTime @map("voting_ends_at")
+  magicLinkRequired Boolean  @default(true) @map("magic_link_required")
 
   @@map("settings")
 }

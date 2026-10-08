@@ -4,7 +4,13 @@
     <span class="brand-title">ABG University Cup 2026</span>
   </a>
   <div class="nav-actions">
-    <a routerLink="/admin" class="admin-link">Admin Login</a>
+    <ng-container *ngIf="adminLoggedIn; else adminLoginLink">
+      <a routerLink="/admin" class="admin-link">Admin</a>
+      <button type="button" class="admin-link logout-link" (click)="logoutAdmin()">Logout</button>
+    </ng-container>
+    <ng-template #adminLoginLink>
+      <a routerLink="/admin" class="admin-link">Admin Login</a>
+    </ng-template>
 
     <div class="settings" (click)="$event.stopPropagation()">
       <button
@@ -88,6 +94,29 @@
               Compact
             </button>
           </div>
+        </div>
+
+        <div class="settings-section" *ngIf="adminLoggedIn">
+          <div class="settings-label">Magic email link</div>
+          <div class="magic-toggle-row">
+            <span class="magic-toggle-text">{{ magicLinkRequired ? 'On' : 'Off' }}</span>
+            <button
+              type="button"
+              class="magic-toggle"
+              role="switch"
+              [attr.aria-checked]="magicLinkRequired"
+              [class.on]="magicLinkRequired"
+              [disabled]="magicToggleBusy"
+              (click)="toggleMagicLink()"
+              aria-label="Toggle magic email link verification"
+            >
+              <span class="magic-toggle-knob"></span>
+            </button>
+          </div>
+          <p class="settings-hint">
+            {{ magicLinkRequired ? 'Voters must verify with email magic link' : 'Open voting with captcha only' }}
+          </p>
+          <p class="settings-error" *ngIf="magicToggleError">{{ magicToggleError }}</p>
         </div>
       </div>
     </div>

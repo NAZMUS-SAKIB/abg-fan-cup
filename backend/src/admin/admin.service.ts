@@ -56,6 +56,11 @@ export class AdminService {
     };
   }
 
+  async updateMagicLinkRequired(magicLinkRequired: boolean) {
+    const value = await this.results.setMagicLinkRequired(!!magicLinkRequired);
+    return { magicLinkRequired: value };
+  }
+
   async createUniversity(name: string) {
     const trimmed = name.trim();
     if (!trimmed) {

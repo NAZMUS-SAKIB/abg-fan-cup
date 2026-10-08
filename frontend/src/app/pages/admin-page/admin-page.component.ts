@@ -1,7 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
+import { AdminSessionService } from '../../core/admin-session.service';
 import { ApiService, ResultsPayload } from '../../core/api.service';
 
 @Component({
@@ -11,10 +13,13 @@ import { ApiService, ResultsPayload } from '../../core/api.service';
   templateUrl: './admin-page.component.html',
   styleUrl: './admin-page.component.scss',
 })
-export class AdminPageComponent {
+export class AdminPageComponent implements OnInit, OnDestroy {
   username = 'admin';
   password = '';
-  token: string | null = localStorage.getItem('abg_admin_token');
+  token: string | null = null;
+  /** false until summary succeeds — prevents stale-token flash of manage UI */
+  authReady = false;
+  verifying = false;
   summary: ResultsPayload | null = null;
   error = '';
   success = '';
@@ -23,9 +28,41 @@ export class AdminPageComponent {
   newUniName = '';
   editingId: number | null = null;
   editingName = '';
+  private sub?: Subscription;
 
-  constructor(private readonly api: ApiService) {
-    if (this.token) this.loadSummary();
+  constructor(
+    private readonly api: ApiService,
+    private readonly adminSession: AdminSessionService,
+  ) {}
+
+  ngOnInit(): void {
+    this.sub = this.adminSession.token$.subscribe((t) => {
+      if (!t) {
+        this.token = null;
+        this.authReady = false;
+        this.verifying = false;
+        this.summary = null;
+        return;
+      }
+      if (t !== this.token) {
+        this.token = t;
+        this.verifying = true;
+        this.loadSummary(true);
+      }
+    });
+    const existing = this.adminSession.getToken();
+    if (existing) {
+      this.token = existing;
+      this.verifying = true;
+      this.loadSummary(true);
+    } else {
+      this.authReady = false;
+      this.token = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.sub?.unsubscribe();
   }
 
   login() {
@@ -34,10 +71,11 @@ export class AdminPageComponent {
     this.api.adminLogin(this.username.trim(), this.password).subscribe({
       next: (res) => {
         this.token = res.accessToken;
-        localStorage.setItem('abg_admin_token', res.accessToken);
+        this.adminSession.setToken(res.accessToken);
         this.password = '';
         this.loading = false;
-        this.loadSummary();
+        this.verifying = true;
+        this.loadSummary(true);
       },
       error: () => {
         this.loading = false;
@@ -48,21 +86,32 @@ export class AdminPageComponent {
 
   logout() {
     this.token = null;
+    this.authReady = false;
+    this.verifying = false;
     this.summary = null;
     this.endLocal = '';
     this.cancelEdit();
-    localStorage.removeItem('abg_admin_token');
+    this.adminSession.clear();
   }
 
-  loadSummary() {
+  loadSummary(asAuthCheck = false) {
     if (!this.token) return;
     this.api.adminSummary(this.token).subscribe({
       next: (data) => {
         this.summary = data;
         this.endLocal = this.toLocalInput(data.votingEndsAt);
+        this.authReady = true;
+        this.verifying = false;
+        this.error = '';
       },
       error: () => {
-        this.error = 'Session expired. Please login again.';
+        this.verifying = false;
+        this.authReady = false;
+        if (asAuthCheck) {
+          this.error = 'Session expired. Please sign in again.';
+        } else {
+          this.error = 'Session expired. Please login again.';
+        }
         this.logout();
       },
     });
@@ -114,14 +163,21 @@ export class AdminPageComponent {
         this.loadSummary();
       },
       error: (err) => {
-        this.error =
-          err.error?.message || 'Could not add university. Name may already exist.';
+        this.error = this.formatHttpError(
+          err,
+          'Could not add university. Name may already exist.',
+        );
       },
     });
   }
 
   startEdit(id: number, name: string) {
-    this.editingId = id;
+    const numericId = Number(id);
+    if (!Number.isFinite(numericId) || numericId <= 0) {
+      this.error = 'Invalid university id. Refresh and try again.';
+      return;
+    }
+    this.editingId = numericId;
     this.editingName = name;
     this.error = '';
     this.success = '';
@@ -133,22 +189,37 @@ export class AdminPageComponent {
   }
 
   saveEdit() {
-    if (!this.token || this.editingId === null || !this.editingName.trim()) return;
+    const token = this.token || this.adminSession.getToken();
+    const id = Number(this.editingId);
+    const name = (this.editingName || '').trim();
+    if (!token || !Number.isFinite(id) || id <= 0 || !name) {
+      this.error = 'Invalid edit state. Click Rename again, then Save.';
+      return;
+    }
+    this.token = token;
     this.error = '';
     this.success = '';
-    this.api
-      .renameUniversity(this.token, this.editingId, this.editingName.trim())
-      .subscribe({
-        next: () => {
-          this.success = 'University renamed.';
-          this.cancelEdit();
-          this.loadSummary();
-        },
-        error: (err) => {
-          this.error =
-            err.error?.message || 'Could not rename university.';
-        },
-      });
+    this.api.renameUniversity(token, id, name).subscribe({
+      next: () => {
+        this.success = 'University renamed.';
+        this.cancelEdit();
+        this.loadSummary();
+      },
+      error: (err) => {
+        this.error = this.formatHttpError(err, 'Could not rename university.');
+      },
+    });
+  }
+
+  private formatHttpError(err: any, fallback: string): string {
+    const raw = err?.error?.message;
+    if (Array.isArray(raw)) return raw.filter(Boolean).join(' ') || fallback;
+    if (typeof raw === 'string' && raw.trim()) return raw;
+    if (typeof err?.message === 'string' && err.message.trim()) {
+      const status = err?.status;
+      return status ? `${err.message} (${status})` : err.message;
+    }
+    return fallback;
   }
 
   deleteUniversity(id: number, name: string, votes: number) {
@@ -166,8 +237,7 @@ export class AdminPageComponent {
         this.loadSummary();
       },
       error: (err) => {
-        this.error =
-          err.error?.message || 'Could not delete university.';
+        this.error = this.formatHttpError(err, 'Could not delete university.');
       },
     });
   }

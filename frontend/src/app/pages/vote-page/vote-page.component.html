@@ -40,16 +40,25 @@
 
   <section class="vote-card">
     <h2>Vote for your university</h2>
-    <p class="section-desc">One verified email. One vote. Select your university, then confirm by email.</p>
+    <p class="section-desc" *ngIf="magicLinkRequired">
+      One verified email. One vote. Select your university, then confirm by email.
+    </p>
+    <p class="section-desc" *ngIf="!magicLinkRequired">
+      Three quick steps — pick a university, verify you are human, cast your one vote.
+    </p>
+    <ol class="vote-steps" *ngIf="!magicLinkRequired && !alreadyVoted && votingOpen" aria-label="Voting steps">
+      <li [class.done]="!!selectedId">1. Choose university</li>
+      <li [class.done]="humanVerified">2. Human check</li>
+      <li [class.done]="alreadyVoted">3. Cast vote</li>
+    </ol>
 
-    <div class="auth-panel" *ngIf="!alreadyVoted && votingOpen">
-      <!-- Signed in -->
+    <!-- Magic-link auth -->
+    <div class="auth-panel" *ngIf="magicLinkRequired && !alreadyVoted && votingOpen">
       <div class="auth-signed" *ngIf="authStep === 'ready'">
         <p class="hint ok">Signed in as {{ emailMasked || email }}</p>
         <button type="button" class="linkish" (click)="signOut()">Use a different email</button>
       </div>
 
-      <!-- Waiting for inbox -->
       <div class="auth-waiting" *ngIf="authStep === 'waiting'">
         <div class="inbox-icon" aria-hidden="true">✉</div>
         <h3 class="auth-title">Check your email</h3>
@@ -72,7 +81,6 @@
         </div>
       </div>
 
-      <!-- Email form -->
       <div class="auth-form" *ngIf="authStep === 'email'">
         <label class="field-label" for="voter-email">Email address</label>
         <input
@@ -98,15 +106,35 @@
         <p class="hint">We’ll email you a one-tap confirmation. No password needed.</p>
       </div>
 
-      <!-- Consuming link -->
       <div class="auth-waiting" *ngIf="authStep === 'consuming'">
         <p class="hint">Confirming your email…</p>
       </div>
     </div>
 
+    <!-- Open voting: robot consent -->
+    <div class="auth-panel robot-panel" *ngIf="!magicLinkRequired && !alreadyVoted && votingOpen">
+      <div class="robot-head">
+        <span class="robot-badge" aria-hidden="true">✓</span>
+        <div>
+          <div class="robot-title">Security check</div>
+          <p class="robot-copy">Required once per vote to keep the Fan Cup fair.</p>
+        </div>
+      </div>
+      <label class="robot-check">
+        <input
+          type="checkbox"
+          [checked]="robotChecked"
+          [disabled]="loading"
+          (change)="onRobotCheck($event)"
+        />
+        <span>I am not a robot</span>
+      </label>
+      <p class="hint ok" *ngIf="humanVerified">Verified — you can cast your vote.</p>
+    </div>
+
     <div class="auth-panel" *ngIf="alreadyVoted">
       <p class="hint ok">Voted{{ votedUniversityName ? ': ' + votedUniversityName : '' }}</p>
-      <p class="hint" *ngIf="emailMasked">Signed in as {{ emailMasked }}</p>
+      <p class="hint" *ngIf="emailMasked && magicLinkRequired">Signed in as {{ emailMasked }}</p>
     </div>
 
     <p class="hint err" *ngIf="!votingOpen">Voting period has ended.</p>
@@ -117,7 +145,7 @@
         class="uni"
         *ngFor="let u of universities"
         [class.selected]="selectedId === u.id"
-        [disabled]="alreadyVoted || loading || !votingOpen || authStep !== 'ready'"
+        [disabled]="!canSelectUniversity"
         (click)="select(u.id)"
       >
         <span class="radio"></span>
@@ -128,11 +156,30 @@
     <button
       type="button"
       class="cast"
-      [disabled]="alreadyVoted || loading || !selectedId || authStep !== 'ready' || !votingOpen"
+      [disabled]="!canCast"
       (click)="castVote()"
     >
       {{ loading ? 'Submitting…' : alreadyVoted ? 'Vote recorded' : 'CAST MY VOTE' }}
     </button>
+
+    <div class="verify-modal" *ngIf="verifyModalOpen" (click)="closeVerifyModal()">
+      <div
+        class="verify-dialog"
+        (click)="$event.stopPropagation()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="verify-title"
+      >
+        <h3 id="verify-title">Confirm you are human</h3>
+        <p>Complete the check below to unlock casting. This helps block automated votes.</p>
+        <div #modalTurnstileHost class="turnstile-host" *ngIf="turnstileEnabled"></div>
+        <p class="hint" *ngIf="!turnstileEnabled">Local mode — press Verify to continue.</p>
+        <div class="auth-actions">
+          <button type="button" class="magic-btn" (click)="confirmHumanVerify()">Verify &amp; continue</button>
+          <button type="button" class="secondary-btn" (click)="closeVerifyModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <p class="msg ok" *ngIf="message && !showCelebration">{{ message }}</p>
     <p class="msg err" *ngIf="error">{{ error }}</p>

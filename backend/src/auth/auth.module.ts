@@ -22,6 +22,6 @@ import { VoterJwtStrategy } from './voter-jwt.strategy';
   ],
   controllers: [AuthController],
   providers: [AuthService, MailService, TurnstileService, VoterJwtStrategy],
-  exports: [AuthService, PassportModule],
+  exports: [AuthService, PassportModule, TurnstileService],
 })
 export class AuthModule {}

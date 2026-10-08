@@ -18,6 +18,7 @@ import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateUniversityDto } from './dto/create-university.dto';
 import { UpdateUniversityDto } from './dto/update-university.dto';
 import { UpdateVotingEndDto } from './dto/update-voting-end.dto';
+import { UpdateVotingSettingsDto } from './dto/update-voting-settings.dto';
 
 @Controller('api/admin')
 export class AdminController {
@@ -41,6 +42,18 @@ export class AdminController {
     return this.adminService.updateVotingEndsAt(dto.votingEndsAt);
   }
 
+  @Patch('voting-settings')
+  @UseGuards(AuthGuard('jwt'))
+  updateVotingSettingsPatch(@Body() dto: UpdateVotingSettingsDto) {
+    return this.adminService.updateMagicLinkRequired(dto.magicLinkRequired);
+  }
+
+  @Post('voting-settings/magic-link')
+  @UseGuards(AuthGuard('jwt'))
+  updateVotingSettings(@Body() dto: UpdateVotingSettingsDto) {
+    return this.adminService.updateMagicLinkRequired(dto.magicLinkRequired);
+  }
+
   @Post('universities')
   @UseGuards(AuthGuard('jwt'))
   createUniversity(@Body() dto: CreateUniversityDto) {
@@ -48,6 +61,16 @@ export class AdminController {
   }
 
   @Patch('universities/:id')
+  @UseGuards(AuthGuard('jwt'))
+  renameUniversityPatch(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUniversityDto,
+  ) {
+    return this.adminService.renameUniversity(id, dto.name);
+  }
+
+  /** POST alias — more reliable than PATCH behind some browsers/proxies */
+  @Post('universities/:id/rename')
   @UseGuards(AuthGuard('jwt'))
   renameUniversity(
     @Param('id', ParseIntPipe) id: number,
