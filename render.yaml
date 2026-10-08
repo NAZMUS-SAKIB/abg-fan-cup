@@ -5,11 +5,14 @@ services:
     plan: free
     rootDir: backend
     buildCommand: npm install && npx prisma generate && npm run build
+    # Advisory lock can time out on Neon free; disable only for single-instance deploys.
     startCommand: npx prisma migrate deploy && npx prisma db seed && npm run start:prod
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK
+        value: "1"
       - key: FRONTEND_URL
         sync: false
       - key: RESEND_API_KEY
