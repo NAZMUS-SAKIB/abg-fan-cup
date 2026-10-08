@@ -20,6 +20,21 @@ services:
         sync: false
       - key: DATABASE_URL
         sync: false
+      # Neon direct (non-pooler) URL — required for prisma migrate on Render
+      - key: DIRECT_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: MAIL_REPLY_TO
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
