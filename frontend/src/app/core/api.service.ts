@@ -139,7 +139,7 @@ export class ApiService {
   }
 
   updateVotingEnd(token: string, votingEndsAt: string) {
-    return this.http.patch<{ votingEndsAt: string; votingOpen: boolean }>(
+    return this.http.post<{ votingEndsAt: string; votingOpen: boolean }>(
       `${this.base}/api/admin/voting-end`,
       { votingEndsAt },
       { headers: new HttpHeaders({ Authorization: `Bearer ${token}` }) },

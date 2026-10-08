@@ -38,6 +38,12 @@ export class AdminController {
 
   @Patch('voting-end')
   @UseGuards(AuthGuard('jwt'))
+  updateVotingEndPatch(@Body() dto: UpdateVotingEndDto) {
+    return this.adminService.updateVotingEndsAt(dto.votingEndsAt);
+  }
+
+  @Post('voting-end')
+  @UseGuards(AuthGuard('jwt'))
   updateVotingEnd(@Body() dto: UpdateVotingEndDto) {
     return this.adminService.updateVotingEndsAt(dto.votingEndsAt);
   }

@@ -121,7 +121,12 @@ export class AdminPageComponent implements OnInit, OnDestroy {
     if (!this.token || !this.endLocal) return;
     this.error = '';
     this.success = '';
-    const iso = new Date(this.endLocal).toISOString();
+    const date = new Date(this.endLocal);
+    if (Number.isNaN(date.getTime())) {
+      this.error = 'Please pick a valid date and time.';
+      return;
+    }
+    const iso = date.toISOString();
     this.api.updateVotingEnd(this.token, iso).subscribe({
       next: (res) => {
         this.success = 'Voting end date updated.';
@@ -133,7 +138,9 @@ export class AdminPageComponent implements OnInit, OnDestroy {
           };
         }
       },
-      error: () => (this.error = 'Could not update voting end date.'),
+      error: (err) => {
+        this.error = this.formatHttpError(err, 'Could not update voting end date.');
+      },
     });
   }
 
