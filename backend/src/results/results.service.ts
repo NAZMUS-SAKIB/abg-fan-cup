@@ -225,10 +225,10 @@ export class ResultsService {
 
   async listUniversities() {
     try {
-      return await this.prisma.university.findMany({
-        orderBy: { sortOrder: 'asc' },
+      const rows = await this.prisma.university.findMany({
         select: { id: true, name: true },
       });
+      return rows.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
     } catch (err) {
       this.logger.error(`listUniversities failed: ${String(err)}`);
       return [];

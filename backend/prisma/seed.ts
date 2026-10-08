@@ -4,16 +4,16 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 const UNIVERSITIES = [
-  'North South University',
-  'Independent University, Bangladesh',
-  'American International University-Bangladesh',
-  'United International University',
+  'Bangladesh University',
   'BRAC University',
-  'East West University',
   'Daffodil International University',
+  'Fareast University',
+  'Independent University Bangladesh',
+  'North South University',
+  'Sonargaon University',
+  'United International University',
   'University of Liberal Arts Bangladesh',
   'University of Scholars',
-  'Sonargaon University',
 ];
 
 async function main() {
